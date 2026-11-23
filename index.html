@@ -92,7 +92,7 @@ sudo docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"</code></pre>
 <li>Go to <em>System Settings → Security</em> and turn on MFA for admins.</li></ol>
 
 <h3>Step 6. Prove the full cycle once</h3>
-<ol class="st"><li><em>Console → Assets → Hosts → Create → Linux</em>. Add a test VM with SSH and a test account.</li>
+<ol class="st"><li><em>Console → Assets → Hosts → Create → Linux</em>. Add a test VM with SSH. Use its real LAN IP, not localhost. Then open <em>Console → Accounts → Create</em> and add the SSH account to this asset, and click <em>Test</em> to confirm it connects.</li>
 <li><em>Console → Authorizations</em>: allow your user to use that asset and account.</li>
 <li><em>Workbench → My Assets</em>: connect via Web CLI and run:</li></ol>
 <div class="cb"><pre><code>whoami
@@ -129,7 +129,7 @@ sudo ./jmsctl.sh start</code></pre></div>
 <div class="tw"><table>
 <tr><th>Key</th><th>What to do</th></tr>
 <tr><td><code>SECRET_KEY</code>, <code>BOOTSTRAP_TOKEN</code></td><td>Generated for you. Back them up. Losing them makes stored credentials unreadable.</td></tr>
-<tr><td><code>DB_HOST</code>, <code>DB_PASSWORD</code></td><td>Built-in MySQL is fine for stage. Set a strong password if you change it.</td></tr>
+<tr><td><code>DB_HOST</code>, <code>DB_PASSWORD</code></td><td>The built-in PostgreSQL (v5 default) is fine for stage. Set a strong password if you change it.</td></tr>
 <tr><td><code>HTTP_PORT</code> / <code>HTTPS_PORT</code></td><td>Keep 80 and 443.</td></tr>
 </table></div>
 <p>Apply any change with <code>sudo ./jmsctl.sh restart</code>.</p>
@@ -159,7 +159,7 @@ nc -vz MONGO_PRIVATE_IP 27017</code></pre></div>
 <p>Use a dedicated server with at least 4 cores, 8 GB RAM and a disk with room for recordings. Put it in the same private network as your VPS targets. Use a name like <code>jms.yourcompany.com</code>.</p>
 
 <h3>Step 2. Install with an external database (recommended)</h3>
-<p>Create a MySQL/MariaDB database and a Redis instance first. Then run the installer and enter their details when asked, or set them in <code>config.txt</code>:</p>
+<p>Create a PostgreSQL database (the v5 default) and a Redis instance first. Use the port and engine settings the installer asks for. Then run the installer and enter their details when asked, or set them in <code>config.txt</code>:</p>
 <div class="cb"><pre><code>DB_HOST=10.0.0.20
 DB_PORT=3306
 DB_USER=jumpserver
@@ -221,11 +221,35 @@ sudo docker logs --tail 100 jms_core</code></pre></div>
 <tr><th>Problem</th><th>Check</th></tr>
 <tr><td>Installer: "Failed to download"</td><td>DNS or network issue. See <a href="#gh-fix">the GitHub download fix</a> below.</td></tr>
 <tr><td>Page does not load</td><td><code>jmsctl.sh status</code>; wait 2 minutes; check firewall for 80/443.</td></tr>
-<tr><td>Port already in use</td><td>Another web server on 80/443. Stop it or change <code>HTTP_PORT</code> in <code>config.txt</code>.</td></tr>
+<tr><td>Port already in use</td><td>Another web server on 80/443. Stop it or change <code>HTTP_PORT</code>. See <a href="#local-fixes">local setup fixes</a>.</td></tr>
+<tr><td>Login: "Configuration file has problems"</td><td>Set <code>DOMAINS</code> to the address you browse to. See <a href="#local-fixes">local setup fixes</a>.</td></tr>
+<tr><td>Account test: "Connection timed out"</td><td>Firewall between containers and target. See <a href="#local-fixes">local setup fixes</a>.</td></tr>
 <tr><td>Asset shows unreachable</td><td><code>nc -vz IP 22</code> from the JumpServer host; check target firewall and key.</td></tr>
 <tr><td>No session recording</td><td>Check storage settings and disk space; run a fresh test session.</td></tr>
 <tr><td>Certificate warning</td><td>Use the full chain file and match <code>SERVER_NAME</code> to your domain.</td></tr>
 </table></div>
+
+<h3 id="local-fixes">Fixes we hit during local setup</h3>
+<p><strong>1. <code>sudo cd</code> says "command not found".</strong> <code>cd</code> is a shell built-in. Run it without <code>sudo</code>: <code>cd /opt/jumpserver-installer-v5.2.1</code>.</p>
+<p><strong>2. Port 80 already in use.</strong> Change JumpServer's HTTP port and recreate the containers.</p>
+<div class="cb"><pre><code>sudo ss -tlnp | grep ':80 '   <span class="c"># what is using port 80?</span>
+sudo sed -i 's/^HTTP_PORT=.*/HTTP_PORT=8088/' /opt/jumpserver/config/config.txt
+grep -E '^(HTTP_PORT|HTTPS_PORT|SSH_PORT)' /opt/jumpserver/config/config.txt
+cd /opt/jumpserver-installer-v5.2.1
+sudo ./jmsctl.sh restart</code></pre></div>
+<p><strong>3. Login page: "Configuration file has problems" (CSRF).</strong> JumpServer only accepts logins from addresses listed in <code>DOMAINS</code>. Add every address you type in the browser, then recreate the containers and open a fresh private window (do not reload the old <code>csrf_failure</code> URL).</p>
+<div class="cb"><pre><code>sudo sed -i '/^DOMAINS=/d' /opt/jumpserver/config/config.txt
+echo 'DOMAINS=localhost,127.0.0.1,YOUR_IP_OR_DOMAIN' | sudo tee -a /opt/jumpserver/config/config.txt
+sudo ./jmsctl.sh down &amp;&amp; sudo ./jmsctl.sh start
+sudo docker exec jms_core env | grep -i DOMAINS</code></pre></div>
+<p><strong>4. No account to select in the authorization form.</strong> The asset has no account yet (the tree shows <code>(0)</code>). Create it first in <em>Console → Accounts → Create</em> (asset, name, username, password), then use <em>Specified accounts</em> in the authorization.</p>
+<p><strong>5. Account test says "Connection timed out".</strong> SSH works on the host, but the JumpServer containers cannot reach it, usually because of the host firewall. Test from the containers, then allow Docker's subnets to reach port 22.</p>
+<div class="cb"><pre><code>sudo docker network inspect jms_net jms_executor --format '{{.Name}} {{range .IPAM.Config}}{{.Subnet}}{{end}}'
+sudo docker exec jms_ansible_executor bash -c 'timeout 5 bash -c "&lt;/dev/tcp/TARGET_IP/22" &amp;&amp; echo OPEN || echo BLOCKED'
+
+sudo ufw allow from SUBNET_FROM_ABOVE to any port 22 proto tcp
+sudo ufw reload</code></pre></div>
+<p>Use the target's real LAN IP in JumpServer, never <code>localhost</code> or <code>127.0.0.1</code>, because the containers would connect to themselves.</p>
 
 <h3 id="gh-fix">Fix: installer fails to download from GitHub</h3>
 <p>Symptom: <code>[ ERROR ] Failed to download jumpserver-installer-vX.Y.Z</code>. GitHub itself works, but the local DNS resolver returns <code>SERVFAIL</code> for some lookups, so the installer cannot fetch its package.</p>
