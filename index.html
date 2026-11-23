@@ -76,6 +76,7 @@ sudo usermod -aG docker $USER   <span class="c"># log out and back in after this
 <h3>Step 3. Run the official installer</h3>
 <div class="cb"><pre><code>curl -sSL https://github.com/jumpserver/jumpserver/releases/latest/download/quick_start.sh | sudo bash</code></pre></div>
 <p>This downloads the installer into <code>/opt/jumpserver-installer-vX.Y.Z</code>, creates the config, pulls images and starts the containers. Accept the defaults for a local test (built-in database and Redis).</p>
+<div class="note"><strong>Got "Failed to download jumpserver-installer"?</strong> Skip to <a href="#gh-fix">the GitHub download fix</a> in the last section, then come back to Step 4.</div>
 
 <h3>Step 4. Start and check it</h3>
 <div class="cb"><pre><code>cd /opt/jumpserver-installer-*
@@ -218,12 +219,52 @@ sudo docker logs --tail 100 jms_core</code></pre></div>
 <h3>Common problems</h3>
 <div class="tw"><table>
 <tr><th>Problem</th><th>Check</th></tr>
+<tr><td>Installer: "Failed to download"</td><td>DNS or network issue. See <a href="#gh-fix">the GitHub download fix</a> below.</td></tr>
 <tr><td>Page does not load</td><td><code>jmsctl.sh status</code>; wait 2 minutes; check firewall for 80/443.</td></tr>
 <tr><td>Port already in use</td><td>Another web server on 80/443. Stop it or change <code>HTTP_PORT</code> in <code>config.txt</code>.</td></tr>
 <tr><td>Asset shows unreachable</td><td><code>nc -vz IP 22</code> from the JumpServer host; check target firewall and key.</td></tr>
 <tr><td>No session recording</td><td>Check storage settings and disk space; run a fresh test session.</td></tr>
 <tr><td>Certificate warning</td><td>Use the full chain file and match <code>SERVER_NAME</code> to your domain.</td></tr>
 </table></div>
+
+<h3 id="gh-fix">Fix: installer fails to download from GitHub</h3>
+<p>Symptom: <code>[ ERROR ] Failed to download jumpserver-installer-vX.Y.Z</code>. GitHub itself works, but the local DNS resolver returns <code>SERVFAIL</code> for some lookups, so the installer cannot fetch its package.</p>
+<p><strong>1. Confirm the problem</strong></p>
+<div class="cb"><pre><code>curl -I https://github.com
+nslookup release-assets.githubusercontent.com
+date   <span class="c"># clock must be correct</span></code></pre></div>
+<p>If <code>nslookup</code> prints addresses and then <code>SERVFAIL</code>, the resolver is the cause. A <code>404</code> from <code>curl -I</code> on the assets host is normal.</p>
+<p><strong>2. Set a reliable DNS</strong></p>
+<div class="cb"><pre><code>sudo mkdir -p /etc/systemd/resolved.conf.d
+printf "[Resolve]\nDNS=1.1.1.1 8.8.8.8\nFallbackDNS=9.9.9.9\n" | sudo tee /etc/systemd/resolved.conf.d/dns.conf
+sudo systemctl restart systemd-resolved
+resolvectl flush-caches
+nslookup release-assets.githubusercontent.com   <span class="c"># SERVFAIL should be gone</span></code></pre></div>
+<p>If a VPN or Wi-Fi setting overrides DNS, change it there or try another network or a phone hotspot.</p>
+<p><strong>3. Retry the installer</strong></p>
+<div class="cb"><pre><code>curl -sSL https://github.com/jumpserver/jumpserver/releases/latest/download/quick_start.sh | sudo bash</code></pre></div>
+<p><strong>4. Still failing? Download it yourself and see the real error</strong></p>
+<div class="cb"><pre><code>cd /tmp
+curl -4 -fL -v -o jms-installer.tar.gz \
+  https://github.com/jumpserver/installer/releases/download/v5.2.1/jumpserver-installer-v5.2.1.tar.gz
+ls -lh jms-installer.tar.gz</code></pre></div>
+<div class="tw"><table>
+<tr><th>Result</th><th>Meaning</th></tr>
+<tr><td>File is a few hundred MB</td><td>Download worked. Continue with step 5.</td></tr>
+<tr><td><code>404</code></td><td>Wrong URL or version. Copy the exact <code>.tar.gz</code> link from the installer releases page on GitHub.</td></tr>
+<tr><td>Timeout or SSL error</td><td>Network problem. Try another connection or use the browser fallback below.</td></tr>
+</table></div>
+<p>If it works only with <code>-4</code>, IPv6 is the problem. Disable it temporarily with <code>sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1</code> and retry step 3.</p>
+<p><strong>5. Install from the downloaded file</strong></p>
+<div class="cb"><pre><code>sudo mv /tmp/jms-installer.tar.gz /opt/
+cd /opt
+sudo tar -xzf jms-installer.tar.gz
+cd jumpserver-installer-v5.2.1
+sudo ./jmsctl.sh install
+sudo ./jmsctl.sh start
+sudo ./jmsctl.sh status</code></pre></div>
+<p><strong>Browser fallback:</strong> download the <code>.tar.gz</code> from the installer releases page, copy it to the server with <code>scp</code>, place it in <code>/opt</code>, and continue from the <code>tar</code> command. Replace <code>v5.2.1</code> with the version you downloaded.</p>
+<p>Tip: <code>usermod -aG docker $USER</code> only takes effect after you log out and back in. Until then use <code>sudo docker ...</code>.</p>
 
 <h3>Upgrade routine</h3>
 <ol class="st"><li>Back up database and <code>config.txt</code>.</li>
@@ -232,7 +273,7 @@ sudo docker logs --tail 100 jms_core</code></pre></div>
 <p class="lead">Check the official docs at jumpserver.com/docs for the latest version-specific notes before each install or upgrade.</p>
 </div></section>
 
-<footer>Commands tested against the JumpServer v4 installer layout. Replace example IPs, domains and passwords with your own.</footer>
+<footer>Written for the JumpServer installer (v4 and v5); console menu names may differ slightly by version. Replace example IPs, domains and passwords with your own.</footer>
 
 <script>
 document.querySelectorAll('.cb').forEach(function(b){
