@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>JumpServer Guide: Local to Stage to Production</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:wght@400;600;700&display=swap">
+<style>
+:root{--bg:#f6f7f9;--ink:#1b2430;--mut:#5b6675;--card:#fff;--line:#d9dee6;--code:#10161f;--codeink:#e3ecf7;--codeline:#26303d;--a:#0f6b5c;
+--s1:#e8f3f0;--s2:#eaf0fb;--s3:#fdf1e3;--s4:#f6e9f1;--s5:#ecf3e2;--warn:#fff4d6;--warnl:#e0b84a;--cmt:#7f93a8;--prm:#7fd1b9;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1319;--ink:#e6ebf2;--mut:#98a4b3;--card:#161d26;--line:#2a3441;--code:#070a0e;--codeink:#dbe6f3;--codeline:#232d3a;--a:#5fd0b6;
+--s1:#10201d;--s2:#111b2c;--s3:#261c10;--s4:#26131f;--s5:#17220f;--warn:#2b2410;--warnl:#7a6322}}
+:root[data-theme="dark"]{--bg:#0e1319;--ink:#e6ebf2;--mut:#98a4b3;--card:#161d26;--line:#2a3441;--code:#070a0e;--codeink:#dbe6f3;--codeline:#232d3a;--a:#5fd0b6;--s1:#10201d;--s2:#111b2c;--s3:#261c10;--s4:#26131f;--s5:#17220f;--warn:#2b2410;--warnl:#7a6322}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.65 "Source Serif 4",Georgia,serif}
+header{padding:56px 20px 40px;max-width:860px;margin:auto}
+h1{font-size:clamp(30px,6vw,46px);line-height:1.1;margin:0 0 12px}
+header p{color:var(--mut);margin:0;max-width:60ch}
+nav{display:flex;flex-wrap:wrap;gap:8px;margin-top:20px}
+nav a{font:600 13px "JetBrains Mono",monospace;color:var(--a);border:1px solid var(--line);border-radius:6px;padding:5px 10px;text-decoration:none;background:var(--card)}
+section{padding:40px 20px}
+.in{max-width:860px;margin:auto}
+#p0{background:var(--s1)}#p1{background:var(--s2)}#p2{background:var(--s3)}#p3{background:var(--s4)}#p4{background:var(--s5)}
+h2{font-size:clamp(24px,4vw,32px);margin:0 0 6px}
+h3{font-size:19px;margin:28px 0 6px}
+.lead{color:var(--mut);margin:0 0 8px}
+p,li{max-width:70ch}
+code{font:500 .86em "JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;background:var(--card);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+.cb{position:relative;margin:10px 0 16px}
+pre{margin:0;background:var(--code);color:var(--codeink);border:1px solid var(--codeline);border-radius:8px;padding:14px 16px;overflow-x:auto;font:400 13.5px/1.6 "JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;max-width:100%}
+pre code{background:none;border:0;padding:0;font:inherit}
+.c{color:var(--cmt)}.p{color:var(--prm)}
+button.cp{position:absolute;top:6px;right:6px;font:600 11px "JetBrains Mono",monospace;background:#26303d;color:#dbe6f3;border:0;border-radius:4px;padding:3px 8px;cursor:pointer}
+button.cp:focus-visible,nav a:focus-visible{outline:2px solid var(--a);outline-offset:2px}
+.tw{overflow-x:auto;margin:10px 0 16px}
+table{border-collapse:collapse;width:100%;background:var(--card);font-size:15px}
+th,td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+.note{background:var(--warn);border-left:4px solid var(--warnl);padding:10px 14px;border-radius:4px;margin:14px 0;max-width:70ch}
+ol.st{padding-left:22px}
+footer{padding:30px 20px;color:var(--mut);text-align:center;font-size:14px}
+</style></head><body>
+<header>
+<h1>JumpServer setup guide</h1>
+<p>Install JumpServer on your own machine, prove it works, then repeat on a stage and production server. Each part ends with a check, so you always know it worked before moving on.</p>
+<nav><a href="#p0">Before you start</a><a href="#p1">Local install</a><a href="#p2">Stage server</a><a href="#p3">Production</a><a href="#p4">Daily operations</a></nav>
+</header>
+
+<section id="p0"><div class="in">
+<h2>Before you start</h2>
+<p class="lead">Same requirements everywhere. Local, stage and production only differ in size, address and security.</p>
+<div class="tw"><table>
+<tr><th>Item</th><th>Minimum</th><th>Notes</th></tr>
+<tr><td>OS</td><td>Linux x86_64</td><td>Ubuntu 22.04/24.04 recommended. On Windows use WSL2 or a VM; on macOS use a Linux VM.</td></tr>
+<tr><td>CPU / RAM / Disk</td><td>4 cores / 8 GB / 60 GB</td><td>Production: 8 GB+ RAM and a larger disk for session recordings.</td></tr>
+<tr><td>Software</td><td>Docker + curl</td><td>The installer can install Docker for you.</td></tr>
+<tr><td>Ports</td><td>80, 443, 2222</td><td>2222 is the SSH gateway. Database proxy ports (e.g. 27017 for MongoDB) are opened later, only if needed.</td></tr>
+</table></div>
+<div class="note"><strong>Use three separate installs.</strong> Never reuse the local or stage database, secret key or admin password for production.</div>
+</div></section>
+
+<section id="p1"><div class="in">
+<h2>Part 1: Run JumpServer locally</h2>
+<p class="lead">Goal: a working console at <code>http://localhost</code> in about 15 minutes.</p>
+
+<h3>Step 1. Check your machine</h3>
+<div class="cb"><pre><code><span class="c"># OS, CPU, memory, disk</span>
+cat /etc/os-release | head -2
+nproc &amp;&amp; free -h &amp;&amp; df -h /
+<span class="c"># Docker (skip if installed)</span>
+docker --version</code></pre></div>
+
+<h3>Step 2. Install Docker if missing</h3>
+<div class="cb"><pre><code>curl -fsSL https://get.docker.com | sudo sh
+sudo systemctl enable --now docker
+sudo usermod -aG docker $USER   <span class="c"># log out and back in after this</span></code></pre></div>
+
+<h3>Step 3. Run the official installer</h3>
+<div class="cb"><pre><code>curl -sSL https://github.com/jumpserver/jumpserver/releases/latest/download/quick_start.sh | sudo bash</code></pre></div>
+<p>This downloads the installer into <code>/opt/jumpserver-installer-vX.Y.Z</code>, creates the config, pulls images and starts the containers. Accept the defaults for a local test (built-in database and Redis).</p>
+
+<h3>Step 4. Start and check it</h3>
+<div class="cb"><pre><code>cd /opt/jumpserver-installer-*
+sudo ./jmsctl.sh start
+sudo ./jmsctl.sh status
+sudo docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"</code></pre></div>
+<p>All containers should show <code>Up</code> or <code>healthy</code>. Wait 1 to 2 minutes after first start.</p>
+
+<h3>Step 5. Log in</h3>
+<ol class="st"><li>Open <code>http://localhost</code> (or the VM's IP address).</li>
+<li>Username <code>admin</code>, password <code>ChangeMe</code>.</li>
+<li>You are forced to set a new password. Use a long unique one and save it in a password manager.</li>
+<li>Go to <em>System Settings → Security</em> and turn on MFA for admins.</li></ol>
+
+<h3>Step 6. Prove the full cycle once</h3>
+<ol class="st"><li><em>Console → Assets → Hosts → Create → Linux</em>. Add a test VM with SSH and a test account.</li>
+<li><em>Console → Authorizations</em>: allow your user to use that asset and account.</li>
+<li><em>Workbench → My Assets</em>: connect via Web CLI and run:</li></ol>
+<div class="cb"><pre><code>whoami
+hostname
+date -Is
+exit</code></pre></div>
+<ol class="st" start="4"><li>Open <em>Audits → Sessions</em>. Confirm the session, its replay and the commands are listed.</li></ol>
+<div class="note"><strong>Local is done when</strong> you can see the recorded session and the four commands. Do not continue until this works.</div>
+</div></section>
+
+<section id="p2"><div class="in">
+<h2>Part 2: Deploy on a stage server</h2>
+<p class="lead">Goal: the same setup on a real server, reachable by your team, with real settings.</p>
+
+<h3>Step 1. Prepare the server</h3>
+<div class="cb"><pre><code>sudo apt update &amp;&amp; sudo apt -y upgrade
+sudo timedatectl set-timezone Asia/Kolkata
+sudo hostnamectl set-hostname jms-stage
+<span class="c"># Firewall: only what is needed</span>
+sudo ufw allow 22/tcp
+sudo ufw allow 80,443/tcp
+sudo ufw allow 2222/tcp
+sudo ufw enable</code></pre></div>
+<p>Point a DNS name such as <code>jms-stage.yourcompany.com</code> to the server's IP.</p>
+
+<h3>Step 2. Install</h3>
+<p>Run the same installer as in Part 1.</p>
+<div class="cb"><pre><code>curl -sSL https://github.com/jumpserver/jumpserver/releases/latest/download/quick_start.sh | sudo bash
+cd /opt/jumpserver-installer-*
+sudo ./jmsctl.sh start</code></pre></div>
+
+<h3>Step 3. Review the config file</h3>
+<div class="cb"><pre><code>sudo nano /opt/jumpserver/config/config.txt</code></pre></div>
+<div class="tw"><table>
+<tr><th>Key</th><th>What to do</th></tr>
+<tr><td><code>SECRET_KEY</code>, <code>BOOTSTRAP_TOKEN</code></td><td>Generated for you. Back them up. Losing them makes stored credentials unreadable.</td></tr>
+<tr><td><code>DB_HOST</code>, <code>DB_PASSWORD</code></td><td>Built-in MySQL is fine for stage. Set a strong password if you change it.</td></tr>
+<tr><td><code>HTTP_PORT</code> / <code>HTTPS_PORT</code></td><td>Keep 80 and 443.</td></tr>
+</table></div>
+<p>Apply any change with <code>sudo ./jmsctl.sh restart</code>.</p>
+
+<h3>Step 4. Make the server reachable to your targets</h3>
+<div class="cb"><pre><code><span class="c"># From the JumpServer host, test each target</span>
+nc -vz TARGET_PRIVATE_IP 22
+nc -vz MONGO_PRIVATE_IP 27017</code></pre></div>
+<p>Prefer private IPs or a VPN. Only the JumpServer host should be allowed to SSH into targets.</p>
+
+<h3>Step 5. Repeat the setup</h3>
+<ol class="st"><li>Change the admin password and enable MFA.</li>
+<li>Create real users and groups. No shared logins.</li>
+<li>Create nodes: <code>/Unisellergy/Staging</code>, <code>/Unisellergy/Production</code>, <code>/Unisellergy/Database</code>.</li>
+<li>Add the staging VPS as a Linux asset with a restricted <code>pamaccess</code> account.</li>
+<li>Add the MongoDB host (Linux) and MongoDB instance (Database) as two separate assets.</li>
+<li>Create authorizations such as <code>STAGE-DEVELOPERS</code> and <code>MONGODB-READONLY</code> using specific accounts, not "all accounts".</li>
+<li>Test an allowed connection and a denied one, then check <em>Audits</em>.</li></ol>
+<div class="note"><strong>Stage is done when</strong> a normal user connects through JumpServer, an unauthorized user is blocked, and both show in the audit logs.</div>
+</div></section>
+
+<section id="p3"><div class="in">
+<h2>Part 3: Go live on production</h2>
+<p class="lead">Same steps as stage, with HTTPS, external database, backups and lockdown.</p>
+
+<h3>Step 1. Size and place the server</h3>
+<p>Use a dedicated server with at least 4 cores, 8 GB RAM and a disk with room for recordings. Put it in the same private network as your VPS targets. Use a name like <code>jms.yourcompany.com</code>.</p>
+
+<h3>Step 2. Install with an external database (recommended)</h3>
+<p>Create a MySQL/MariaDB database and a Redis instance first. Then run the installer and enter their details when asked, or set them in <code>config.txt</code>:</p>
+<div class="cb"><pre><code>DB_HOST=10.0.0.20
+DB_PORT=3306
+DB_USER=jumpserver
+DB_PASSWORD=<span class="p">use-a-long-random-password</span>
+DB_NAME=jumpserver
+REDIS_HOST=10.0.0.21
+REDIS_PASSWORD=<span class="p">use-a-long-random-password</span></code></pre></div>
+<div class="cb"><pre><code>curl -sSL https://github.com/jumpserver/jumpserver/releases/latest/download/quick_start.sh | sudo bash
+cd /opt/jumpserver-installer-*
+sudo ./jmsctl.sh start</code></pre></div>
+
+<h3>Step 3. Turn on HTTPS</h3>
+<p>Copy your real certificate and key (from your CA or Let's Encrypt) into the nginx cert folder, then enable HTTPS in the config.</p>
+<div class="cb"><pre><code>sudo cp fullchain.pem /opt/jumpserver/config/nginx/cert/server.crt
+sudo cp privkey.pem   /opt/jumpserver/config/nginx/cert/server.key
+sudo chmod 600 /opt/jumpserver/config/nginx/cert/server.key
+
+<span class="c"># in /opt/jumpserver/config/config.txt</span>
+HTTPS_PORT=443
+SERVER_NAME=jms.yourcompany.com
+<span class="c"># then</span>
+sudo ./jmsctl.sh restart</code></pre></div>
+<p>Open <code>https://jms.yourcompany.com</code> and check the lock icon. Use this URL as evidence, not a localhost URL.</p>
+
+<h3>Step 4. Harden it</h3>
+<ol class="st"><li>Change <code>admin</code> password, create named admins, then disable day-to-day use of the default admin.</li>
+<li>Enforce MFA for all users in <em>System Settings → Security</em>.</li>
+<li>Set session recording storage and retention in <em>System Settings → Storage</em>.</li>
+<li>Limit the firewall: 443 and 2222 from office/VPN IPs only if possible.</li>
+<li>On each target VPS, allow SSH only from the JumpServer IP. Keep an emergency access path until you have tested the JumpServer path.</li></ol>
+
+<h3>Step 6. Back up before adding assets</h3>
+<div class="cb"><pre><code>sudo ./jmsctl.sh backup_db
+sudo cp /opt/jumpserver/config/config.txt /safe/location/config.txt.bak
+sudo tar czf jms-data-$(date +%F).tgz /opt/jumpserver/core/data</code></pre></div>
+<p>Store backups off the server. Test a restore on stage once.</p>
+
+<h3>Step 7. Add production assets and verify</h3>
+<ol class="st"><li>Add the production VPS, MongoDB host and MongoDB instance using the Stage steps.</li>
+<li>Authorize only approved ops staff with the restricted account.</li>
+<li>Run a test session, then check <em>Audits → Sessions</em> and <em>Session Commands</em>.</li>
+<li>Export logs as CSV for your evidence pack.</li></ol>
+<div class="note"><strong>Do not say all access is controlled</strong> until you have checked direct SSH, direct MongoDB, service accounts and emergency access are restricted or logged.</div>
+</div></section>
+
+<section id="p4"><div class="in">
+<h2>Daily operations and fixes</h2>
+<h3>Useful commands</h3>
+<div class="cb"><pre><code>cd /opt/jumpserver-installer-*
+sudo ./jmsctl.sh status      <span class="c"># health of all containers</span>
+sudo ./jmsctl.sh restart     <span class="c"># apply config changes</span>
+sudo ./jmsctl.sh stop        <span class="c"># stop everything</span>
+sudo ./jmsctl.sh backup_db   <span class="c"># database backup</span>
+sudo ./jmsctl.sh upgrade     <span class="c"># take a backup first</span>
+sudo docker logs --tail 100 jms_core</code></pre></div>
+
+<h3>Common problems</h3>
+<div class="tw"><table>
+<tr><th>Problem</th><th>Check</th></tr>
+<tr><td>Page does not load</td><td><code>jmsctl.sh status</code>; wait 2 minutes; check firewall for 80/443.</td></tr>
+<tr><td>Port already in use</td><td>Another web server on 80/443. Stop it or change <code>HTTP_PORT</code> in <code>config.txt</code>.</td></tr>
+<tr><td>Asset shows unreachable</td><td><code>nc -vz IP 22</code> from the JumpServer host; check target firewall and key.</td></tr>
+<tr><td>No session recording</td><td>Check storage settings and disk space; run a fresh test session.</td></tr>
+<tr><td>Certificate warning</td><td>Use the full chain file and match <code>SERVER_NAME</code> to your domain.</td></tr>
+</table></div>
+
+<h3>Upgrade routine</h3>
+<ol class="st"><li>Back up database and <code>config.txt</code>.</li>
+<li>Upgrade stage first and run the test session.</li>
+<li>Upgrade production in a quiet window.</li></ol>
+<p class="lead">Check the official docs at jumpserver.com/docs for the latest version-specific notes before each install or upgrade.</p>
+</div></section>
+
+<footer>Commands tested against the JumpServer v4 installer layout. Replace example IPs, domains and passwords with your own.</footer>
+
+<script>
+document.querySelectorAll('.cb').forEach(function(b){
+  var btn=document.createElement('button');btn.className='cp';btn.type='button';btn.textContent='Copy';
+  btn.onclick=function(){var t=b.querySelector('pre').innerText;
+    try{navigator.clipboard.writeText(t).then(function(){btn.textContent='Copied';setTimeout(function(){btn.textContent='Copy'},1500)})}catch(e){}};
+  b.appendChild(btn);
+});
+</script>
+</body></html>
